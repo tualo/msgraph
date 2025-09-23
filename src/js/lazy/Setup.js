@@ -1,14 +1,14 @@
-Ext.define('Tualo.MicrosoftMail.lazy.Setup', {
+Ext.define('Tualo.MSGraph.lazy.Setup', {
     extend: 'Ext.panel.Panel',
     requires: [
-        'Tualo.MicrosoftMail.lazy.models.Setup',
-        'Tualo.MicrosoftMail.lazy.controller.Setup'
+        'Tualo.MSGraph.lazy.models.Setup',
+        'Tualo.MSGraph.lazy.controller.Setup'
     ],
-    alias: 'widget.msmail_setup',
-    controller: 'msmail_setup',
+    alias: 'widget.msgraph_setup',
+    controller: 'msgraph_setup',
 
     viewModel: {
-        type: 'msmail_setup'
+        type: 'msgraph_setup'
     },
     listeners: {
         boxReady: 'onBoxReady'

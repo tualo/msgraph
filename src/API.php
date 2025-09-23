@@ -6,11 +6,15 @@ use Tualo\Office\Basic\TualoApplication;
 use Ramsey\Uuid\Uuid;
 use GuzzleHttp\Client;
 use Tualo\Office\Basic\TualoApplication as App;
+use Tualo\Office\MSGraph\api\MissedTokenException;
 
 class API
 {
 
     private static $ENV = null;
+    private static $SCOPES = null;
+
+
 
     public static function addEnvrionment(string $id, string $val)
     {
@@ -54,23 +58,26 @@ class API
             $db = TualoApplication::get('session')->getDB();
             try {
 
+                self::$ENV = [];
                 $tenantId = $db->singleValue('select val from  msgraph_setup where id = "tenantId"', [], 'val');
                 $tenantId = App::configuration('microsoft-mail', 'tenantId', $tenantId);
-                $clientSecret = $db->singleValue('select val from  msgraph_setup where id = "clientSecret"', [], 'val');
+
+                $data = $db->direct('select id,val from  msgraph_setup  ', []);
+                foreach ($data as $d) {
+                    self::$ENV[$d['id']] = $d['val'];
+                }
+
                 if (!$tenantId) {
                     throw new \Exception('no setup found!');
                 }
 
-                if (!is_null($db)) {
-                    $data = $db->direct('select id,val from msgraph_environments');
-                    if (count($data) == 0) {
-                        throw new \Exception('no setup');
-                    }
-                    foreach ($data as $d) {
-                        self::$ENV[$d['id']] = $d['val'];
-                    }
-                } else {
-                    throw new \Exception('Database not found!');
+                $data = $db->singleValue('select val from msgraph_environments where id = concat("msgraph_",getSessionUser())', [], 'val');
+                if ($data === false) {
+                    throw new \Exception('no setup');
+                }
+                $json = json_decode($data, true);
+                foreach ($json as $k => $d) {
+                    self::$ENV[$k] = $d;
                 }
             } catch (\Exception $e) {
                 throw new \Exception($e->getMessage());
@@ -79,30 +86,189 @@ class API
         return self::$ENV;
     }
 
+    public static function getScopes(): array
+    {
+        if (is_null(self::$SCOPES)) {
+            $db = TualoApplication::get('session')->getDB();
+            try {
+                $data = $db->direct('select id from msgraph_scope');
+                if (count($data) == 0) {
+                    throw new \Exception('no scope setup');
+                }
+                foreach ($data as $d) {
+                    self::$SCOPES[] = $d['id'];
+                }
+            } catch (\Exception $e) {
+                throw new \Exception($e->getMessage());
+            }
+        }
+        return self::$SCOPES;
+    }
+
     public static function env($key)
     {
         $env = self::getEnvironment();
+
         if (isset($env[$key])) {
             return $env[$key];
         }
+
+        if ($key == 'access_token') {
+            throw new MissedTokenException();
+        }
+
         throw new \Exception('Environment ' . $key . ' not found!');
     }
 
 
-    private static function getClient()
+    private static function getClient(array $header = []): Client
     {
         $client = new Client(
             [
-                'base_uri' => self::env('url'),
+                // 'base_uri' => self::env('url'),
                 'timeout'  => 2.0,
-                'headers' => [
-                    // 'apikey' => self::env('apikey')
-                ]
+                'headers' => $header
             ]
         );
         return $client;
     }
 
+    public static function getMe()
+    {
+        $tokenClient = self::getClient([
+            'authorization' => 'Bearer ' . self::env('access_token'),
+        ]);
+
+        $url = 'https://graph.microsoft.com/v1.0/me';
+        $response = json_decode($tokenClient->get($url)->getBody()->getContents(), true);
+        return $response;
+    }
+
+
+    public static function pushFileTo()
+    {
+        // https://graph.microsoft.com/v1.0/me/drive/root:/FolderA/current.docx:/content
+        $tokenClient = self::getClient([
+            'authorization' => 'Bearer ' . self::env('access_token'),
+        ]);
+        $db = TualoApplication::get('session')->getDB();
+        $file_id = 183145;
+        $files = $db->direct("select * from fb_wvd.doc_binary where document_link = {id}", [
+            'id' => $file_id
+        ]);
+
+        $url = 'https://graph.microsoft.com/v1.0/me/drive/root:/FolderA/' . $file_id . '.docx:/content';
+        $response = json_decode($tokenClient->put($url, [
+            'Content-Type' => 'application/msword',
+            'body' => $files[0]['doc_data']
+        ])->getBody()->getContents(), true);
+        return $response;
+    }
+
+
+    /**
+     * Refresh Access Token, if it is older than 10 minutes
+     * @throws \Exception
+     */
+    public static function refreshAccessToken()
+    {
+        $scopes = self::getScopes();
+
+
+        $tokenClient = self::getClient();
+        $tenantId = self::env('tenantId');
+        $clientId = self::env('clientId');
+        $db = App::get('session')->getDB();
+
+
+        $sql = 'select msgraph_environments.* from msgraph_environments where now()  > expires + interval - 600 second and login = getSessionUser()';
+        $data = $db->direct($sql, []);
+        foreach ($data as $d) {
+            $json = json_decode($d['val'], true);
+            if (!isset($json['refresh_token'])) {
+                throw new \Exception('no refresh_token found');
+            }
+            $url = 'https://login.microsoftonline.com/' . $tenantId . '/oauth2/v2.0/token';
+            $response = json_decode($tokenClient->post($url, [
+                'form_params' => [
+                    'client_id' => $clientId,
+
+                    'refresh_token' => $json['refresh_token'],
+                    'grant_type' => 'refresh_token',
+                    // 'client_secret' => self::env('client_secret'),
+                    'scope' => implode(' ', $scopes)
+                ]
+            ])->getBody()->getContents(), true);
+
+            if (!isset($response['access_token'])) {
+                throw new \Exception('no access_token found');
+            }
+            if (!isset($response['refresh_token'])) {
+                throw new \Exception('no refresh_token found');
+            }
+            if (!isset($response['expires_in'])) {
+                throw new \Exception('no expires_in found');
+            }
+
+            $sql = '
+                insert into msgraph_environments 
+                    (id,val,login,updated,expires) 
+                values 
+                    (concat("msgraph_",getSessionUser()),{object},getSessionUser(),now(),now() + interval ' . $response['expires_in'] . ' second  )
+                on duplicate key update 
+                    val=values(val),
+                    login=values(login),
+                    updated=values(updated),
+                    expires=values(expires)
+            ';
+            $db->direct($sql, [
+                'object' => json_encode($response)
+            ]);
+        }
+
+
+        return true;
+    }
+
+    public static function getDeviceCodeLogin()
+    {
+
+        $scopes = self::getScopes();
+
+
+        $tokenClient = self::getClient();
+        $tenantId = self::env('tenantId');
+        $clientId = self::env('clientId');
+
+
+        $deviceCodeRequestUrl = 'https://login.microsoftonline.com/' . $tenantId . '/oauth2/v2.0/devicecode';
+        $deviceCodeResponse = json_decode($tokenClient->post($deviceCodeRequestUrl, [
+            'form_params' => [
+                'client_id' => $clientId,
+                'scope' => implode(' ', $scopes)
+            ]
+        ])->getBody()->getContents(), true);
+        return $deviceCodeResponse;
+    }
+
+    public static function getTokenByDeviceCode(string $device_code)
+    {
+        $tokenClient = self::getClient();
+        $tenantId = self::env('tenantId');
+        $clientId = self::env('clientId');
+
+        $tokenRequestUrl = 'https://login.microsoftonline.com/' . $tenantId . '/oauth2/v2.0/token';
+        $tokenResponse = json_decode($tokenClient->post($tokenRequestUrl, [
+            'form_params' => [
+                'client_id' => $clientId,
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code',
+                'device_code' => $device_code
+            ]
+        ])->getBody()->getContents(), true);
+        return $tokenResponse;
+    }
+
+    /*
     public static function authorize()
     {
         self::$ENV['url'] = "https://login.microsoftonline.com";
@@ -138,10 +304,7 @@ class API
         var_dump($result);
         return $result;
 
-        /*
-        &redirect_uri=http%3A%2F%2Flocalhost%2Fmyapp%2F&response_mode=query&scope=offline_access%20user.read%20mail.read&state=12345', [
-        ]);
-        */
+        
     }
 
 
@@ -230,5 +393,5 @@ class API
         }
         $result = json_decode($response->getBody()->getContents(), true);
         return $result;
-    }
+    }*/
 }

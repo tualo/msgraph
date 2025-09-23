@@ -1,11 +1,11 @@
-Ext.define('Tualo.MicrosoftMail.lazy.dashboard.State', {
+Ext.define('Tualo.MSGraph.lazy.dashboard.State', {
     requires: [
         // 'Ext.chart.CartesianChart'
     ],
     extend: 'Ext.dashboard.Part',
-    alias: 'part.tualodashboard_msmail_state',
- 
-    
+    alias: 'part.tualodashboard_msgraph_state',
+
+
     viewTemplate: {
         title: 'Microsoft Verbindung',
 
@@ -16,8 +16,8 @@ Ext.define('Tualo.MicrosoftMail.lazy.dashboard.State', {
                 layout: 'fit',
                 items: [],
                 listeners: {
-                    boxready: function(me){
-                        var elem = Ext.create('Tualo.MicrosoftMail.lazy.Setup');
+                    boxready: function (me) {
+                        var elem = Ext.create('Tualo.MSGraph.lazy.Setup');
                         console.log(me);
                         me.add(elem);
                     }

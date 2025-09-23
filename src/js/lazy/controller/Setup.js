@@ -1,6 +1,6 @@
-Ext.define('Tualo.MicrosoftMail.lazy.controller.Setup', {
+Ext.define('Tualo.MSGraph.lazy.controller.Setup', {
     extend: 'Ext.app.ViewController',
-    alias: 'controller.msmail_setup',
+    alias: 'controller.msgraph_setup',
 
     onBoxReady: function () {
         let me = this;
@@ -9,7 +9,7 @@ Ext.define('Tualo.MicrosoftMail.lazy.controller.Setup', {
 
     queryUser: async function () {
         let me = this;
-        let response = await fetch('./microsoft-mail/setup/user');
+        let response = await fetch('./msgraph/setup/user');
         let data = await response.json();
         if (data.success) {
             me.getView().getComponent('startpanel').hide();
@@ -17,15 +17,16 @@ Ext.define('Tualo.MicrosoftMail.lazy.controller.Setup', {
             me.getView().getComponent('apiconfig').hide();
             me.getView().getComponent('user').show();
 
-            me.getViewModel().set('displayName', data.data.displayName)
-            me.getViewModel().set('mail', data.data.mail)
+
+            me.getViewModel().set('displayName', data.response.displayName)
+            me.getViewModel().set('mail', data.response.mail)
 
         } else {
             if (data.error == "Lifetime validation failed, the token is expired.") {
                 setTimeout(me.getDeviceToken.bind(me), 2000)
             }
 
-            if (data.error == "No access token") {
+            if (data.error == "no access token") {
                 setTimeout(me.getDeviceToken.bind(me), 2000)
             }
 
@@ -74,17 +75,18 @@ Ext.define('Tualo.MicrosoftMail.lazy.controller.Setup', {
         me.getView().getComponent('apiconfig').hide();
         me.getView().getComponent('devicetoken').show();
 
-        let response = await fetch('./microsoft-mail/setup/devicelogin');
+        let response = await fetch('./msgraph/setup/user/devicecode');
         let data = await response.json();
         console.log(data)
         if (data.success) {
+            let response = data.response
 
-            me.getViewModel().set('devicetoken_verification_uri', data.verification_uri)
-            me.getViewModel().set('devicetoken_device_code', data.device_code)
-            me.getViewModel().set('devicetoken_message', data.message)
-            me.getViewModel().set('devicetoken_expires_in', parseInt(data.expires_in))
-            me.getViewModel().set('devicetoken_interval', parseInt(data.interval))
-            me.getViewModel().set('devicetoken_user_code', data.user_code)
+            me.getViewModel().set('devicetoken_verification_uri', response.verification_uri)
+            me.getViewModel().set('devicetoken_device_code', response.device_code)
+            me.getViewModel().set('devicetoken_message', response.message)
+            me.getViewModel().set('devicetoken_expires_in', parseInt(response.expires_in))
+            me.getViewModel().set('devicetoken_interval', parseInt(response.interval))
+            me.getViewModel().set('devicetoken_user_code', response.user_code)
             me.deviceCodeChecker = setTimeout(
                 me.checkToken.bind(me),
                 me.getViewModel().get('devicetoken_interval') * 1000 + 10
@@ -94,7 +96,7 @@ Ext.define('Tualo.MicrosoftMail.lazy.controller.Setup', {
 
     checkToken: async function () {
         let me = this;
-        let response = await fetch('./microsoft-mail/setup/accesstoken', {
+        let response = await fetch('./msgraph/setup/user/checktoken', {
             method: "POST",
             body: JSON.stringify({ device_code: me.getViewModel().get('devicetoken_device_code') })
         });
