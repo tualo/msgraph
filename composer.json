@@ -1,0 +1,25 @@
+{
+  "name": "tualo/msgrapth",
+  "description": "tualo - msgrapth",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Thomas Hoffmann",
+      "email": "thomas.hoffmann@tualo.de"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Tualo\\Office\\MicrosoftMail\\": "src/"
+    },
+    "files": [
+      "src/functions.php"
+    ]
+  },
+  "minimum-stability": "dev",
+  "require": {
+    "microsoft/microsoft-graph": "^2.32.0"
+  },
+  "version": "1.0.0"
+}
