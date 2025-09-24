@@ -76,6 +76,11 @@ class FileRoute implements IRoute
         }, ['put'], true);
 
         BasicRoute::add('/msgraph/webhook', function ($matches) {
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validationToken'])) {
+                // Validierung von Microsoft Graph
+                echo $_GET['validationToken'];
+                exit;
+            }
             App::contenttype('application/json');
             try {
                 self::store();
