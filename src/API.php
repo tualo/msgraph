@@ -2,11 +2,23 @@
 
 namespace Tualo\Office\MSGraph;
 
-use Tualo\Office\Basic\TualoApplication;
+use Microsoft\Graph\GraphRequestAdapter;
+use Microsoft\Kiota\Abstractions\Authentication\BaseBearerTokenAuthenticationProvider;
+use Microsoft\Graph\Generated\Models\Subscription;
+use Microsoft\Kiota\Authentication\Cache\InMemoryAccessTokenCache;
+use Microsoft\Graph\GraphServiceClient;
+use Microsoft\Graph\Core\Authentication\GraphPhpLeagueAccessTokenProvider;
+use Microsoft\Graph\Core\Authentication\GraphPhpLeagueAuthenticationProvider;
+use Microsoft\Kiota\Authentication\Oauth\AuthorizationCodeContext;
+
 use Ramsey\Uuid\Uuid;
 use GuzzleHttp\Client;
+use League\OAuth2\Client\Token\AccessToken;
+
+
 use Tualo\Office\Basic\TualoApplication as App;
 use Tualo\Office\MSGraph\api\MissedTokenException;
+use Tualo\Office\MSGraph\api\DeviceCodeTokenProvider;
 
 class API
 {
@@ -19,7 +31,7 @@ class API
     public static function addEnvrionment(string $id, string $val)
     {
         self::$ENV[$id] = $val;
-        $db = TualoApplication::get('session')->getDB();
+        $db = App::get('session')->getDB();
         try {
             if (!is_null($db)) {
                 $db->direct('insert into msgraph_environments (id,val) values ({id},{val}) on duplicate key update val=values(val)', [
@@ -55,7 +67,7 @@ class API
     public static function getEnvironment(): array
     {
         if (is_null(self::$ENV)) {
-            $db = TualoApplication::get('session')->getDB();
+            $db = App::get('session')->getDB();
             try {
 
                 self::$ENV = [];
@@ -89,7 +101,7 @@ class API
     public static function getScopes(): array
     {
         if (is_null(self::$SCOPES)) {
-            $db = TualoApplication::get('session')->getDB();
+            $db = App::get('session')->getDB();
             try {
                 $data = $db->direct('select id from msgraph_scope');
                 if (count($data) == 0) {
@@ -126,7 +138,7 @@ class API
         $client = new Client(
             [
                 // 'base_uri' => self::env('url'),
-                'timeout'  => 2.0,
+                'timeout'  => 3.0,
                 'headers' => $header
             ]
         );
@@ -151,7 +163,7 @@ class API
         $tokenClient = self::getClient([
             'authorization' => 'Bearer ' . self::env('access_token'),
         ]);
-        $db = TualoApplication::get('session')->getDB();
+        $db = App::get('session')->getDB();
         $file_id = 183145;
         $files = $db->direct("select * from fb_wvd.doc_binary where document_link = {id}", [
             'id' => $file_id
@@ -268,130 +280,98 @@ class API
         return $tokenResponse;
     }
 
-    /*
-    public static function authorize()
+
+    public static function getChildren()
     {
-        self::$ENV['url'] = "https://login.microsoftonline.com";
-
-        $db = App::get('session')->getDB();
-        $clientId = $db->singleValue('select val from  msgraph_setup where id = "clientId"', [], 'val');
-        $tenantId = $db->singleValue('select val from  msgraph_setup where id = "tenantId"', [], 'val');
-        self::$ENV['tenant'] = App::configuration('microsoft-mail', 'tenantId', $tenantId);
-        self::$ENV['client_id'] = App::configuration('microsoft-mail', 'clientId', $clientId);
-        $client = self::getClient();
-        //echo self::replacer('/{{tenant}}/oauth2/v2.0/authorize?={{client_id}}&response_type=code'); exit();
-        $response = $client->get(self::replacer('/{{tenant}}/oauth2/v2.0/authorize'), [
-            'query' => [
-                'client_id' => self::$ENV['client_id'],
-                'response_type' => 'code',
-                'response_mode' => 'json',
-                'redirect_uri' => 'http://localhost/myapp/',
-                'state' => Uuid::uuid4(),
-                'scope' => 'offline_access user.read mail.read mail.send',
-            ]
+        $tokenClient = self::getClient([
+            'Authorization' => 'Bearer ' .  self::env('access_token'),
+            'Content-Type' => 'application/json'
         ]);
+        $tenantId = self::env('tenantId');
+        $clientId = self::env('clientId');
 
-        $code = $response->getStatusCode(); // 200
-        $reason = $response->getReasonPhrase(); // OK
-
-        if ($code != 200) {
-
-            throw new \Exception($reason);
-        }
-        echo $response->getBody()->getContents();
-        exit();
-        $result = json_decode($response->getBody()->getContents(), true);
-        var_dump($result);
-        return $result;
-
-        
+        $tokenRequestUrl = 'https://graph.microsoft.com/v1.0/drives';
+        $tokenResponse = json_decode($tokenClient->get($tokenRequestUrl)->getBody()->getContents(), true);
+        return $tokenResponse;
     }
 
 
 
-    public static function getDateRange(int $start, int $stop, string $base_currency, array $currencies, string $accuracy = 'day')
+    public static function GraphClient()
     {
-        $client = self::getClient();
-        $response = $client->get('/v3/range', [
-            'query' => [
-                'datetime_start' => date('Y-m-d\TH:i:s\Z', $start),
-                'datetime_end' => date('Y-m-d\TH:i:s\Z', $stop),
-                'accuracy' => $accuracy,
-                'base_currency' => $base_currency,
-                'currencies' => implode(',', $currencies)
-            ]
-        ]);
-        $code = $response->getStatusCode(); // 200
-        $reason = $response->getReasonPhrase(); // OK
-
-        if ($code != 200) {
-            throw new \Exception($reason);
-        }
-        $result = json_decode($response->getBody()->getContents(), true);
-        return $result;
+        $scopes = self::getScopes();
+        $tokenProvider = new DeviceCodeTokenProvider(
+            self::env('clientId'),
+            self::env('tenantId'),
+            implode(' ', $scopes),
+            self::env('access_token')
+        );
+        $authProvider = new BaseBearerTokenAuthenticationProvider($tokenProvider);
+        $adapter = new GraphRequestAdapter($authProvider);
+        $graphServiceClient = GraphServiceClient::createWithRequestAdapter($adapter);
+        return $graphServiceClient;
     }
 
 
-    public static function get_token($code = null)
+    public static function createFolder()
     {
-        try {
-            $db = TualoApplication::get('session')->getDB();
-            $clientId = $db->singleValue('select val from  msgraph_setup where id = "clientId"', [], 'val');
-            $tenantId = $db->singleValue('select val from  msgraph_setup where id = "tenantId"', [], 'val');
-            $clientSecret = $db->singleValue('select val from  msgraph_setup where id = "clientSecret"', [], 'val');
-            $url_token = 'https://login.microsoftonline.com/' . $tenantId . "/oauth2/v2.0/token";
-            $client = self::getClient();
-            $scopes = [
-                'Mail.ReadWrite',
-                'Mail.Send',
-                'User.Read.All',
-                'Files.Read',
-                'Files.Read.All',
-                'Files.ReadWrite',
-                'Files.ReadWrite.All',
-                'Sites.Read.All',
-                'Sites.ReadWrite.All',
-            ];
-            $request = $client->post($url_token, array(
-                "form_params" => array(
-                    "client_id"     => $clientId,
-                    "client_secret" => $clientSecret,
-                    "redirect_uri"  => "",
-                    "scope"         => implode(" ", $scopes),
-                    "grant_type"    => "authorization_code",
-                    "code"          => $code,
-                ),
-            ))->getBody()->getContents();
-
-            $result        = json_decode($request);
-            $result->valid = true;
-
-            return $result;
-        } catch (\Exception $e) {
-            print_r($e);
-            return false;
-        }
+        // https://graph.microsoft.com/v1.0/me/drive/root/children
+        // https://tualo-my.sharepoint.com/_api/v2.0/drives('default')/items('root')/children('01X23YR22C6YMJR36BOZA2WDX4274PAJQC')
+        $graphServiceClient = self::GraphClient();
     }
-
-
-    public static function getDate(int $date, string $base_currency, array $currencies, string $accuracy = 'day')
+    // https://graph.microsoft.com/v1.0/subscriptions
+    // https://fb-wvd.tualo.io/server/~/d44209f7-e5b2-4719-ae85-f303d9ab0db6/msgraph/webhook
+    public static function createSubscription(string $resource, string $changeType = 'created,updated,delete', int $lifetime = 43200)
     {
-        $client = self::getClient();
-        $response = $client->get('/v3/historical', [
-            'query' => [
-                'date' => date('Y-m-d\TH:i:s\Z', $date),
-                'accuracy' => $accuracy,
-                'base_currency' => $base_currency,
-                'currencies' => implode(',', $currencies)
+
+        $graphServiceClient = self::GraphClient();
+
+
+        $requestBody = new Subscription();
+        $requestBody->setChangeType('updated');
+        $requestBody->setNotificationUrl('https://fb-wvd.tualo.io/server/~/d44209f7-e5b2-4719-ae85-f303d9ab0db6/msgraph/webhook');
+        $requestBody->setResource($resource);
+        $requestBody->setExpirationDateTime(new \DateTime('2025-09-24T18:23:45.9356913Z'));
+        $requestBody->setClientState('secretClientValue');
+        $requestBody->setLatestSupportedTlsVersion('v1_2');
+
+        $result = $graphServiceClient->subscriptions()->post($requestBody)->wait();
+
+        if (false) {
+            $requestBody = new Subscription();
+            $requestBody->setChangeType('created,updated,deleted');
+            // $requestBody->setLifecycleNotificationUrl('https://webhook.azurewebsites.net/api/lifecycleNotifications');
+            $requestBody->setResource($resource);
+            $requestBody->setExpirationDateTime(new \DateTime('2025-09-24T11:00:00.0000000Z'));
+            $requestBody->setClientState('SecretClientState');
+
+            echo 1;
+            $result = $graphServiceClient->subscriptions()->post($requestBody)->wait();
+
+            echo 2;
+        }
+        /*
+
+        $tokenClient = self::getClient();
+        $tenantId = self::env('tenantId');
+        $clientId = self::env('clientId');
+        $url = 'https://graph.microsoft.com/v1.0/subscriptions';
+        $response = $tokenClient->post($url, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $tokenClient->getAccessToken(),
+                'Content-Type' => 'application/json'
+            ],
+            'json' => [
+                'changeType' => $changeType,
+                'notificationUrl' => 'https://fb-wvd.tualo.io/server/~/d44209f7-e5b2-4719-ae85-f303d9ab0db6/msgraph/webhook',
+                'resource' => $resource,
+                // 'expirationDateTime' => (new \DateTime())->add(new \DateInterval('PT' . $lifetime . 'S'))->format(DATE_ISO8601),
+                'clientState' => 'secretClientValue'
             ]
         ]);
-        $code = $response->getStatusCode(); // 200
-        $reason = $response->getReasonPhrase(); // OK
-
-        if ($code != 200) {
-            throw new \Exception($reason);
-        }
-        $result = json_decode($response->getBody()->getContents(), true);
+        echo 1;
+        return json_decode($response->getBody()->getContents(), true);
+        */
         return $result;
-    }*/
+    }
 }
