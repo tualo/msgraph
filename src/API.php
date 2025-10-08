@@ -28,7 +28,7 @@ class API
 
 
 
-    public static function addEnvrionment(string $id, string $val)
+    public static function addEnvironment(string $id, string $val)
     {
         self::$ENV[$id] = $val;
         $db = App::get('session')->getDB();
@@ -64,9 +64,9 @@ class API
 
 
 
-    public static function getEnvironment(): array
+    public static function getEnvironment(bool $forceRefresh = false): array
     {
-        if (is_null(self::$ENV)) {
+        if (is_null(self::$ENV) || $forceRefresh) {
             $db = App::get('session')->getDB();
             try {
 
@@ -247,6 +247,8 @@ class API
             $db->direct($sql, [
                 'object' => json_encode($response)
             ]);
+
+            self::getEnvironment(true);
         }
 
 
