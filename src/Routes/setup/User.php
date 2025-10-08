@@ -19,7 +19,13 @@ class UserRoute implements IRoute
             try {
                 $response = API::getMe();
                 App::result('response', $response);
-                App::result('success', true);
+                $response['statusCode'] = $response['statusCode'] ?? 200;
+                if ($response['statusCode'] == 200) {
+                    App::result('success', true);
+                } else {
+                    App::result('success', false);
+                    App::result('error', $response['error']['message'] ?? 'Unknown error');
+                }
             } catch (MissedTokenException $e) {
                 App::result('error', "no access token");
             } catch (ApiException $e) {

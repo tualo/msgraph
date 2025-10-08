@@ -133,7 +133,7 @@ class API
     }
 
 
-    private static function getClient(array $header = []): Client
+    protected static function getClient(array $header = []): Client
     {
         $client = new Client(
             [
@@ -145,14 +145,25 @@ class API
         return $client;
     }
 
+    public static function graphURL(): string
+    {
+        return 'https://graph.microsoft.com/v1.0';
+    }
+
     public static function getMe()
     {
         $tokenClient = self::getClient([
-            'authorization' => 'Bearer ' . self::env('access_token'),
+            'authorization' => 'Bearer ' . self::env('access_token')
         ]);
 
-        $url = 'https://graph.microsoft.com/v1.0/me';
-        $response = json_decode($tokenClient->get($url)->getBody()->getContents(), true);
+        $url = self::graphURL() . '/me';
+        $clientResponse = $tokenClient->get($url, [
+            'http_errors' => false,
+            'exceptions' => false
+        ]);
+        $statusCode = $clientResponse->getStatusCode();
+        $response = json_decode($clientResponse->getBody()->getContents(), true);
+        $response['statusCode'] = $statusCode;
         return $response;
     }
 
