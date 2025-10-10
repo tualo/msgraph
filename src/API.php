@@ -138,7 +138,7 @@ class API
         $client = new Client(
             [
                 // 'base_uri' => self::env('url'),
-                'timeout'  => 8.0,
+                'timeout'  => 16.0,
                 'headers' => $header
             ]
         );
