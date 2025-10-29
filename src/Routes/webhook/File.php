@@ -12,7 +12,7 @@ use Tualo\Office\MSGraph\api\MissedTokenException;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
 
-class FileRoute implements IRoute
+class FileRoute extends \Tualo\Office\Basic\RouteWrapper
 {
     public static function store()
     {

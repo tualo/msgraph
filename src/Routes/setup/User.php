@@ -10,7 +10,7 @@ use Microsoft\Kiota\Abstractions\ApiException;
 use Tualo\Office\MSGraph\API;
 use Tualo\Office\MSGraph\api\MissedTokenException;
 
-class UserRoute implements IRoute
+class UserRoute extends \Tualo\Office\Basic\RouteWrapper
 {
     public static function register()
     {

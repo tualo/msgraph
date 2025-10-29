@@ -19,7 +19,7 @@ use Microsoft\Graph\Generated\Users\Item\Messages\MessagesRequestBuilderGetReque
 use Microsoft\Graph\Generated\Applications\ApplicationsRequestBuilderGetRequestConfiguration;
 
 
-class PushFileRoute implements IRoute
+class PushFileRoute extends \Tualo\Office\Basic\RouteWrapper
 {
     public static function register()
     {
