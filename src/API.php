@@ -25,6 +25,7 @@ class API
 
     private static $ENV = null;
     private static $SCOPES = null;
+    private static $hideNoSetupError = false;
 
 
 
@@ -64,7 +65,7 @@ class API
 
 
 
-    public static function getEnvironment(bool $forceRefresh = false): array
+    public static function getEnvironment(bool $forceRefresh = false, bool $hideNoSetupError = false): array
     {
         if (is_null(self::$ENV) || $forceRefresh) {
             $db = App::get('session')->getDB();
@@ -85,7 +86,9 @@ class API
 
                 $data = $db->singleValue('select val from msgraph_environments where id = concat("msgraph_",getSessionUser())', [], 'val');
                 if ($data === false) {
-                    throw new \Exception('no setup');
+                    if (!$hideNoSetupError) {
+                        throw new \Exception('no setup');
+                    }
                 }
                 $json = json_decode($data, true);
                 foreach ($json as $k => $d) {
@@ -119,7 +122,7 @@ class API
 
     public static function env($key)
     {
-        $env = self::getEnvironment();
+        $env = self::getEnvironment(false, self::$hideNoSetupError);
 
         if (isset($env[$key])) {
             return $env[$key];
@@ -199,6 +202,7 @@ class API
 
 
         $tokenClient = self::getClient();
+        self::$hideNoSetupError = true;
         $tenantId = self::env('tenantId');
         $clientId = self::env('clientId');
         $db = App::get('session')->getDB();
