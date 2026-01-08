@@ -21,6 +21,21 @@ class UserRoute extends \Tualo\Office\Basic\RouteWrapper
                 App::result('response', $response);
                 $response['statusCode'] = $response['statusCode'] ?? 200;
                 if ($response['statusCode'] == 200) {
+                    if ($response['statusCode'] == 401) {
+                        App::result('refresh', API::refreshAccessToken());
+                        $response = API::getMe();
+                        App::result('response', $response);
+                        $response['statusCode'] = $response['statusCode'] ?? 200;
+                        if ($response['statusCode'] == 200) {
+                            if ($response['statusCode'] == 401) {
+                                throw new MissedTokenException('invalid token');
+                            }
+                            App::result('success', true);
+                        } else {
+                            App::result('success', false);
+                            App::result('error', $response['error']['message'] ?? 'Unknown error');
+                        }
+                    }
                     App::result('success', true);
                 } else {
                     App::result('success', false);

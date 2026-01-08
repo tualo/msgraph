@@ -179,7 +179,7 @@ class API
         ]);
         $db = App::get('session')->getDB();
         $file_id = 183145;
-        $files = $db->direct("select * from fb_wvd.doc_binary where document_link = {id}", [
+        $files = $db->direct("select * from doc_binary where document_link = {id}", [
             'id' => $file_id
         ]);
 
@@ -202,7 +202,6 @@ class API
 
 
         $tokenClient = self::getClient();
-        self::$hideNoSetupError = true;
         $tenantId = self::env('tenantId');
         $clientId = self::env('clientId');
         $db = App::get('session')->getDB();
@@ -262,6 +261,7 @@ class API
     public static function getDeviceCodeLogin()
     {
 
+        self::$hideNoSetupError = true;
         $scopes = self::getScopes();
 
 
@@ -282,6 +282,7 @@ class API
 
     public static function getTokenByDeviceCode(string $device_code)
     {
+        self::$hideNoSetupError = true;
         $tokenClient = self::getClient();
         $tenantId = self::env('tenantId');
         $clientId = self::env('clientId');

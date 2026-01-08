@@ -21,5 +21,5 @@
   "require": {
     "microsoft/microsoft-graph": "^2.32.0"
   },
-  "version": "1.0.8"
+  "version": "1.0.9"
 }
