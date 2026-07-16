@@ -191,6 +191,10 @@ class API
         ]);
 
         $url = self::graphURL() . '/me';
+        if (self::has('clientSecret')) {
+            $url = self::graphURL() . '/users/' . rawurlencode(self::env('defaultUserId'));
+        }
+
         $clientResponse = $tokenClient->get($url, [
             'http_errors' => false,
             'exceptions' => false
