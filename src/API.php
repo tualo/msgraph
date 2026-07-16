@@ -27,6 +27,7 @@ class API
     private static $ENV = null;
     private static $SCOPES = null;
     private static $hideNoSetupError = false;
+    private static $accessType = 'user';
 
 
 
@@ -36,10 +37,17 @@ class API
         $db = App::get('session')->getDB();
         try {
             if (!is_null($db)) {
-                $db->direct('insert into msgraph_environments (id,val) values ({id},{val}) on duplicate key update val=values(val)', [
-                    'id' => $id,
-                    'val' => $val
-                ]);
+                if (self::$accessType == 'user') {
+                    $db->direct('insert into msgraph_environments (id,val,login) values ({id},{val},getSessionUser()) on duplicate key update val=values(val)', [
+                        'id' => $id,
+                        'val' => $val
+                    ]);
+                } else {
+                    $db->direct('insert into msgraph_app_environments (id,val) values ({id},{val}) on duplicate key update val=values(val)', [
+                        'id' => $id,
+                        'val' => $val
+                    ]);
+                }
             }
         } catch (\Exception $e) {
         }
@@ -85,10 +93,25 @@ class API
                     throw new \Exception('no setup found!');
                 }
 
-                $data = $db->singleValue('select val from msgraph_environments where id = concat("msgraph_",getSessionUser())', [], 'val');
-                if ($data === false) {
-                    if (!$hideNoSetupError) {
-                        throw new \Exception('no setup');
+                if (self::has('clientSecret')) {
+                    self::$accessType = 'app';
+                } else {
+                    self::$accessType = 'user';
+                }
+
+                if (self::$accessType == 'user') {
+                    $data = $db->singleValue('select val from msgraph_environments where id = concat("msgraph_",getSessionUser())', [], 'val');
+                    if ($data === false) {
+                        if (!$hideNoSetupError) {
+                            throw new \Exception('no setup');
+                        }
+                    }
+                } else {
+                    $data = $db->singleValue('select val from msgraph_app_environments where id = "msgraph_app"', [], 'val');
+                    if ($data === false) {
+                        if (!$hideNoSetupError) {
+                            throw new \Exception('no setup');
+                        }
                     }
                 }
                 $json = json_decode($data, true);
@@ -210,7 +233,13 @@ class API
             );
             $provider = new GraphPhpLeagueAccessTokenProvider($tokenContext);
             $authorizationToken = $provider->getAuthorizationTokenAsync('https://graph.microsoft.com')->wait();
+
             // var_dump($authorizationToken);
+
+            self::addEnvironment('msgraph_app', json_encode([
+                'access_token' => $authorizationToken,
+                'expires' => time() + 600000
+            ]));
             return $authorizationToken;
         }
         throw new \Exception('no clientSecret found');
@@ -230,6 +259,10 @@ class API
         $tenantId = self::env('tenantId');
         $clientId = self::env('clientId');
         $db = App::get('session')->getDB();
+
+        if (self::has('clientSecret')) {
+            return;
+        }
 
 
         $sql = 'select msgraph_environments.* from msgraph_environments where now()  > expires + interval - 600 second and login = getSessionUser()';
