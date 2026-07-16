@@ -199,6 +199,22 @@ class API
         return $response;
     }
 
+    public static function getAccessToken(): string
+    {
+        if (self::has('clientSecret')) {
+            $tokenContext = new ClientCredentialContext(
+                self::env('tenantId'),
+                self::env('clientId'),
+                self::env('clientSecret')
+            );
+            $provider = new GraphPhpLeagueAccessTokenProvider($tokenContext);
+            $authorizationToken = $provider->getAuthorizationTokenAsync('https://graph.microsoft.com')->wait();
+            // var_dump($authorizationToken);
+            return $authorizationToken;
+        }
+        throw new \Exception('no clientSecret found');
+    }
+
 
     /**
      * Refresh Access Token, if it is older than 10 minutes
@@ -329,7 +345,6 @@ class API
     {
         if (self::has('clientSecret')) {
             $tokenContext = new ClientCredentialContext(
-
                 self::env('tenantId'),
                 self::env('clientId'),
                 self::env('clientSecret')
