@@ -7,6 +7,7 @@ use Microsoft\Kiota\Abstractions\Authentication\BaseBearerTokenAuthenticationPro
 use Microsoft\Graph\Generated\Models\Subscription;
 use Microsoft\Kiota\Authentication\Cache\InMemoryAccessTokenCache;
 use Microsoft\Graph\GraphServiceClient;
+use Microsoft\Kiota\Authentication\Oauth\ClientCredentialContext;
 use Microsoft\Graph\Core\Authentication\GraphPhpLeagueAccessTokenProvider;
 use Microsoft\Graph\Core\Authentication\GraphPhpLeagueAuthenticationProvider;
 use Microsoft\Kiota\Authentication\Oauth\AuthorizationCodeContext;
@@ -120,7 +121,14 @@ class API
         return self::$SCOPES;
     }
 
-    public static function env($key)
+
+    public static function has(string $key): bool
+    {
+        $env = self::getEnvironment(false, self::$hideNoSetupError);
+        return isset($env[$key]);
+    }
+
+    public static function env(string $key): string
     {
         $env = self::getEnvironment(false, self::$hideNoSetupError);
 
@@ -314,20 +322,32 @@ class API
     }
 
 
+    public function test() {}
+
 
     public static function GraphClient()
     {
-        $scopes = self::getScopes();
-        $tokenProvider = new DeviceCodeTokenProvider(
-            self::env('clientId'),
-            self::env('tenantId'),
-            implode(' ', $scopes),
-            self::env('access_token')
-        );
-        $authProvider = new BaseBearerTokenAuthenticationProvider($tokenProvider);
-        $adapter = new GraphRequestAdapter($authProvider);
-        $graphServiceClient = GraphServiceClient::createWithRequestAdapter($adapter);
-        return $graphServiceClient;
+        if (self::has('clientSecret')) {
+            $tokenContext = new ClientCredentialContext(
+
+                self::env('tenantId'),
+                self::env('clientId'),
+                self::env('clientSecret')
+            );
+            return new GraphServiceClient($tokenContext);
+        } else {
+            $scopes = self::getScopes();
+            $tokenProvider = new DeviceCodeTokenProvider(
+                self::env('clientId'),
+                self::env('tenantId'),
+                implode(' ', $scopes),
+                self::env('access_token')
+            );
+            $authProvider = new BaseBearerTokenAuthenticationProvider($tokenProvider);
+            $adapter = new GraphRequestAdapter($authProvider);
+            $graphServiceClient = GraphServiceClient::createWithRequestAdapter($adapter);
+            return $graphServiceClient;
+        }
     }
 
 
