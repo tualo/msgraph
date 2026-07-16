@@ -49,7 +49,7 @@ Ext.define('Tualo.MSGraph.lazy.controller.Setup', {
 
     saveConfig: async function () {
         let me = this;
-        let response = await fetch('./microsoft-mail/setup/apiconfig', {
+        let response = await fetch('./msgraph/setup/apiconfig', {
             method: "POST",
             body: JSON.stringify({
                 client_id: me.getViewModel().get('client_id'),
