@@ -43,7 +43,7 @@ class API
                         'val' => $val
                     ]);
                 } else {
-                    $db->direct('insert into msgraph_app_environments (id,val) values ({id},{val}) on duplicate key update val=values(val)', [
+                    $db->direct('insert into msgraph_app_environments (id,val,login) values ({id},{val},getSessionUser()) on duplicate key update val=values(val)', [
                         'id' => $id,
                         'val' => $val
                     ]);
