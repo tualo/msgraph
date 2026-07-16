@@ -201,6 +201,7 @@ class API
 
     public static function getAccessToken(): string
     {
+        self::getEnvironment(false, true);
         if (self::has('clientSecret')) {
             $tokenContext = new ClientCredentialContext(
                 self::env('tenantId'),
