@@ -36,6 +36,7 @@ Ext.define('Tualo.MSGraph.lazy.controller.Setup', {
 
             if (data.error == "no setup found!") {
 
+
                 me.getView().getComponent('startpanel').hide();
                 me.getView().getComponent('user').hide();
                 me.getView().getComponent('devicetoken').hide();
