@@ -12,8 +12,9 @@ composer require tualo/msgraph
 
 Composer registriert dabei den Namespace `Tualo\Office\MSGraph\` fuer das
 Verzeichnis `src/` und bindet `src/functions.php` automatisch ein. Die
-Microsoft-Graph-Abhaengigkeit (`microsoft/microsoft-graph` ab `2.32.0`) wird
-ebenfalls installiert.
+Microsoft-Graph-Abhaengigkeit (`microsoft/microsoft-graph` ^3.9.0) wird
+ebenfalls installiert. Das SDK benoetigt PHP 8.2 oder neuer. Der aktuelle
+Kiota-2-HTTP-Adapter unterstuetzt Guzzle 8 mit PSR-7 3.x und Promises 3.x.
 
 ## Setup
 
